@@ -1,0 +1,1394 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local CoreGui = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+
+local Window = Library:CreateWindow({
+    Title = "Tung tung sahur hub",
+    Footer = "survive zombie arena tung tung sahur Hub",
+    Icon = 137859155367,
+    NotifySide = "Right",
+    ShowCustomCursor = true,
+})
+
+local MainTab = Window:AddTab("Main", "plane")
+local KillAuraTab = Window:AddTab("Kill Aura", "swords")
+local FixLagTab = Window:AddTab("Fix Lag", "zap")
+local SettingsTab = Window:AddTab("UI Settings", "settings")
+
+local FlyBox = MainTab:AddLeftGroupbox("Fly Controls")
+local JumpAndSpeedBox = MainTab:AddRightGroupbox("Jump And Speed")
+
+local Flying = false
+local FlySpeed = 50
+local FlyConnection = nil
+local BodyGyro = nil
+local BodyVelocity = nil
+local NoclipConnection = nil
+
+local PlayerScripts = LocalPlayer:WaitForChild("PlayerScripts")
+local PlayerModule = require(PlayerScripts:WaitForChild("PlayerModule"))
+local ControlModule = PlayerModule:GetControls()
+
+FlyBox:AddToggle("FlyToggle", {
+    Text = "Enable Fly",
+    Default = false,
+    Tooltip = "Toggle fly mode",
+    Callback = function(Value)
+        Flying = Value
+        if Flying then
+            StartFly()
+        else
+            StopFly()
+        end
+    end,
+})
+
+FlyBox:AddSlider("FlySpeed", {
+    Text = "Fly Speed",
+    Default = 50,
+    Min = 10,
+    Max = 200,
+    Rounding = 0,
+    Tooltip = "Movement speed while flying",
+    Callback = function(Value)
+        FlySpeed = Value
+    end,
+})
+
+FlyBox:AddToggle("NoclipToggle", {
+    Text = "Noclip",
+    Default = false,
+    Tooltip = "Walk through walls",
+    Callback = function(Value)
+        if Value then
+            NoclipConnection = RunService.Stepped:Connect(function()
+                local char = LocalPlayer.Character
+                if char then
+                    for _, part in pairs(char:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            part.CanCollide = false
+                        end
+                    end
+                end
+            end)
+        else
+            if NoclipConnection then
+                NoclipConnection:Disconnect()
+                NoclipConnection = nil
+            end
+            local char = LocalPlayer.Character
+            if char then
+                for _, part in pairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = true
+                    end
+                end
+            end
+        end
+    end,
+})
+
+function StartFly()
+    local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local Humanoid = Character:WaitForChild("Humanoid")
+    local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+    
+    BodyGyro = Instance.new("BodyGyro")
+    BodyGyro.P = 9e4
+    BodyGyro.MaxTorque = Vector3.new(9e9, 0, 9e9)
+    BodyGyro.CFrame = HumanoidRootPart.CFrame
+    BodyGyro.Parent = HumanoidRootPart
+    
+    BodyVelocity = Instance.new("BodyVelocity")
+    BodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    BodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    BodyVelocity.Parent = HumanoidRootPart
+    
+    Humanoid.PlatformStand = true
+    
+    FlyConnection = RunService.RenderStepped:Connect(function()
+        if not Flying then return end
+        
+        local camCF = Camera.CFrame
+        local camLook = camCF.LookVector
+        local camRight = camCF.RightVector
+        local moveVec = ControlModule:GetMoveVector()
+        local moveDir = (camLook * -moveVec.Z) + (camRight * moveVec.X)
+        
+        if moveDir.Magnitude > 0.01 then
+            moveDir = moveDir.Unit * FlySpeed
+        else
+            moveDir = Vector3.new(0, 0, 0)
+        end
+        
+        if BodyVelocity then
+            BodyVelocity.Velocity = moveDir
+        end
+        
+        if BodyGyro then
+            local yaw = math.atan2(camLook.X, camLook.Z)
+            BodyGyro.CFrame = CFrame.Angles(0, yaw, 0)
+        end
+    end)
+    
+    Library:Notify("Fly Enabled!", 3)
+end
+
+function StopFly()
+    if FlyConnection then
+        FlyConnection:Disconnect()
+        FlyConnection = nil
+    end
+    if BodyGyro then
+        BodyGyro:Destroy()
+        BodyGyro = nil
+    end
+    if BodyVelocity then
+        BodyVelocity:Destroy()
+        BodyVelocity = nil
+    end
+    
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.PlatformStand = false
+        end
+    end
+    
+    Library:Notify("Fly Disabled", 2)
+end
+
+local InfiniteJump = false
+
+
+local JumpBoostEnabled = false
+
+
+local SpeedEnabled = false
+
+
+
+
+
+local JumpPower = 50
+
+
+local WalkSpeed = 16
+
+
+
+
+
+UserInputService.JumpRequest:Connect(function()
+
+
+    if InfiniteJump then
+
+
+        local char = LocalPlayer.Character
+
+
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+
+
+
+
+
+        if hum then
+
+
+            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+
+
+        end
+
+
+    end
+
+
+end)
+
+
+
+
+
+RunService.RenderStepped:Connect(function()
+
+
+    local char = LocalPlayer.Character
+
+
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+
+
+
+
+
+    if hum then
+
+
+        if JumpBoostEnabled then
+
+
+            hum.UseJumpPower = true
+
+
+            hum.JumpPower = JumpPower
+
+
+        else
+
+
+            hum.JumpPower = 50
+
+
+        end
+
+
+
+
+
+        if SpeedEnabled then
+
+
+            hum.WalkSpeed = WalkSpeed
+
+
+        else
+
+
+            hum.WalkSpeed = 16
+
+
+        end
+
+
+    end
+
+
+end)
+
+
+
+
+
+JumpAndSpeedBox:AddButton({
+
+
+    Text = "Enable Infinite Jump",
+
+
+    Func = function()
+
+
+        InfiniteJump = true
+
+
+        Library:Notify("Infinite Jump Enabled",3)
+
+
+    end
+
+
+})
+
+
+
+
+
+JumpAndSpeedBox:AddButton({
+
+
+    Text = "Disable Infinite Jump",
+
+
+    Func = function()
+
+
+        InfiniteJump = false
+
+
+        Library:Notify("Infinite Jump Disabled",3)
+
+
+    end
+
+
+})
+
+
+
+
+
+JumpAndSpeedBox:AddToggle("JumpBoostToggle", {
+
+
+    Text = "Jump Boost",
+
+
+    Default = false,
+
+
+    Callback = function(Value)
+
+
+        JumpBoostEnabled = Value
+
+
+    end,
+
+
+})
+
+
+
+
+
+JumpAndSpeedBox:AddSlider("JumpBoostValue", {
+
+
+    Text = "Jump Power",
+
+
+    Default = 50,
+
+
+    Min = 1,
+
+
+    Max = 100,
+
+
+    Rounding = 0,
+
+
+    Callback = function(Value)
+
+
+        JumpPower = Value
+
+
+    end,
+
+
+})
+
+
+
+
+
+JumpAndSpeedBox:AddToggle("EnableSpeed", {
+
+
+    Text = "Speed",
+
+
+    Default = false,
+
+
+    Callback = function(Value)
+
+
+        SpeedEnabled = Value
+
+
+    end,
+
+
+})
+
+
+
+
+
+JumpAndSpeedBox:AddSlider("SpeedValue", {
+
+
+    Text = "Speed Value",
+
+
+    Default = 16,
+
+
+    Min = 1,
+
+
+    Max = 100,
+
+
+    Rounding = 0,
+
+
+    Callback = function(Value)
+
+
+        WalkSpeed = Value
+
+
+    end,
+
+
+})
+
+local KABox = KillAuraTab:AddLeftGroupbox("Kill Aura")
+local TweenBox = KillAuraTab:AddRightGroupbox("Farm leaderboard")
+
+local KAConfig = {
+    Enabled = false,
+    Range = 50,
+    FireRate = 0.06,
+    MaxRemotesPerFire = 6,
+    BatchSize = 5,
+    HighlightTarget = true,
+    SilentAim = true,
+    Keybind = Enum.KeyCode.K,
+}
+
+local TweenEnabled = false
+
+
+local SavedCFrame = nil
+
+
+local ActiveTween = nil
+
+
+
+
+
+local TweenTarget = CFrame.new(-211.12, -21.59, -356.24)
+
+
+local TweenSpeed = 367
+
+
+
+
+
+TweenBox:AddToggle("TweenZombieSpot", {
+
+
+    Text = "Auto Clear Wave",
+
+
+    Default = false,
+
+
+    Callback = function(Value)
+
+
+        TweenEnabled = Value
+
+
+
+
+
+        local char = LocalPlayer.Character
+
+
+        if not char then return end
+
+
+
+
+
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+
+
+        local hum = char:FindFirstChildOfClass("Humanoid")
+
+
+
+
+
+        if not hrp or not hum then return end
+
+
+
+
+
+        if Value then
+
+
+            SavedCFrame = hrp.CFrame
+
+
+
+
+
+            local distance = (hrp.Position - TweenTarget.Position).Magnitude
+
+
+
+
+
+            ActiveTween = TweenService:Create(
+
+
+                hrp,
+
+
+                TweenInfo.new(distance / TweenSpeed, Enum.EasingStyle.Linear),
+
+
+                {CFrame = TweenTarget}
+
+
+            )
+
+
+
+
+
+            ActiveTween:Play()
+
+
+
+
+
+            task.spawn(function()
+
+
+                repeat task.wait()
+
+
+
+
+
+                    if TweenEnabled then
+
+
+                        hrp.Velocity = Vector3.zero
+
+
+                        hrp.AssemblyLinearVelocity = Vector3.zero
+
+
+                        hrp.CFrame = TweenTarget
+
+
+                    end
+
+
+
+
+
+                until not TweenEnabled
+
+
+            end)
+
+
+
+
+
+            hum.PlatformStand = true
+
+
+
+
+
+            Library:Notify("Tween Enabled",3)
+
+
+        else
+
+
+            if ActiveTween then
+
+
+                ActiveTween:Cancel()
+
+
+                ActiveTween = nil
+
+
+            end
+
+
+
+
+
+            hum.PlatformStand = false
+
+
+
+
+
+            if SavedCFrame then
+
+
+                hrp.CFrame = SavedCFrame
+
+
+            end
+
+
+
+
+
+            Library:Notify("Tween Disabled",3)
+
+
+        end
+
+
+    end,
+
+
+})
+local KAState = {
+    Connection = nil,
+    LastFireTime = 0,
+    CurrentTarget = nil,
+    TargetHighlight = nil,
+    ZombieClient = nil,
+    GunClient = nil,
+    GunRemotes = nil,
+    EquippedGunName = nil,
+    LastRemoteCount = 0,
+    TotalDamageDealt = 0,
+}
+
+local KACachedZombies = {}
+local KALastScan = 0
+local KAScanInterval = 0.1
+
+local function KAFindGameClients()
+    if _G.ZombieClient and typeof(_G.ZombieClient) == "table" and _G.ZombieClient.Zombies then
+        KAState.ZombieClient = _G.ZombieClient
+    end
+    if _G.GunClient and typeof(_G.GunClient) == "table" and _G.GunClient.TryFire then
+        KAState.GunClient = _G.GunClient
+    end
+    
+    local playerScripts = LocalPlayer:WaitForChild("PlayerScripts", 5)
+    if playerScripts then
+        local function scan(parent)
+            for _, obj in ipairs(parent:GetChildren()) do
+                if obj:IsA("ModuleScript") then
+                    local s, r = pcall(function() return require(obj) end)
+                    if s and typeof(r) == "table" then
+                        if not KAState.ZombieClient and r.Zombies and r.GetNearbyZombieIds then
+                            KAState.ZombieClient = r
+                        end
+                        if not KAState.GunClient and r.TryFire and r.EquippedGun ~= nil then
+                            KAState.GunClient = r
+                        end
+                    end
+                end
+                if obj:IsA("Folder") or obj:IsA("ScreenGui") then
+                    scan(obj)
+                end
+            end
+        end
+        scan(playerScripts)
+    end
+    
+    local gunRemotes = ReplicatedStorage:FindFirstChild("GunRemotes")
+    if gunRemotes then
+        KAState.GunRemotes = {
+            Fire = gunRemotes:FindFirstChild("GunFire"),
+            Hit = gunRemotes:FindFirstChild("GunHit"),
+        }
+    end
+    
+    print("[KA] ZombieClient:", KAState.ZombieClient ~= nil)
+    print("[KA] GunClient:", KAState.GunClient ~= nil)
+    print("[KA] GunRemotes:", KAState.GunRemotes ~= nil)
+end
+
+local function KAScanZombiesFast()
+    local now = tick()
+    if now - KALastScan < KAScanInterval then
+        return KACachedZombies
+    end
+    KALastScan = now
+    
+    local zombies = {}
+    
+    if KAState.ZombieClient and KAState.ZombieClient.Zombies then
+        for id, data in pairs(KAState.ZombieClient.Zombies) do
+            if data and not data.IsDying and data.Model and data.Model.Parent then
+                table.insert(zombies, {
+                    Id = id,
+                    Data = data,
+                    Model = data.Model,
+                    Position = data.CurrentPosition or data.TargetPosition,
+                    Tier = data.Tier or "Unknown",
+                    Distance = math.huge,
+                })
+            end
+        end
+        KACachedZombies = zombies
+        return zombies
+    end
+    
+    local folder = Workspace:FindFirstChild("Zombies_Local")
+    if folder then
+        for _, model in ipairs(folder:GetChildren()) do
+            if model:IsA("Model") then
+                local pos = nil
+                local hrp = model:FindFirstChild("HumanoidRootPart")
+                if hrp then pos = hrp.Position end
+                local id = tonumber(model.Name:match("%d+")) or model.Name
+                table.insert(zombies, {
+                    Id = id, 
+                    Model = model, 
+                    Position = pos, 
+                    Distance = math.huge,
+                    Tier = "Unknown"
+                })
+            end
+        end
+    end
+    
+    KACachedZombies = zombies
+    return zombies
+end
+
+local function KAGetClosestZombies(maxCount)
+    local char = LocalPlayer.Character
+    if not char then return {} end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return {} end
+    
+    local myPos = hrp.Position
+    local allZombies = KAScanZombiesFast()
+    local inRange = {}
+    
+    for _, zombie in ipairs(allZombies) do
+        if zombie.Position then
+            local dist = (zombie.Position - myPos).Magnitude
+            if dist <= KAConfig.Range then
+                zombie.Distance = dist
+                table.insert(inRange, zombie)
+            end
+        end
+    end
+    
+    if #inRange == 0 then return {} end
+    if #inRange <= maxCount then return inRange end
+    
+    local result = {}
+    local used = {}
+    
+    for n = 1, maxCount do
+        local closestIdx = nil
+        local closestDist = math.huge
+        
+        for i = 1, #inRange do
+            if not used[i] and inRange[i].Distance < closestDist then
+                closestDist = inRange[i].Distance
+                closestIdx = i
+            end
+        end
+        
+        if closestIdx then
+            used[closestIdx] = true
+            table.insert(result, inRange[closestIdx])
+        end
+    end
+    
+    return result
+end
+
+local function KAClearHighlight()
+    if KAState.TargetHighlight then
+        pcall(function() KAState.TargetHighlight:Destroy() end)
+        KAState.TargetHighlight = nil
+    end
+end
+
+local function KAHighlightTarget(zombie)
+    if not KAConfig.HighlightTarget or not zombie or not zombie.Model then
+        KAClearHighlight()
+        return
+    end
+    if KAState.CurrentTarget == zombie and KAState.TargetHighlight and KAState.TargetHighlight.Parent then
+        return
+    end
+    KAClearHighlight()
+    
+    local highlight = Instance.new("Highlight")
+    highlight.FillColor = Color3.fromRGB(220, 40, 40)
+    highlight.OutlineColor = Color3.fromRGB(255, 60, 60)
+    highlight.FillTransparency = 0.5
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Adornee = zombie.Model
+    highlight.Parent = zombie.Model
+    KAState.TargetHighlight = highlight
+end
+
+local function KAGetEquippedGun()
+    local char = LocalPlayer.Character
+    if not char then return nil end
+    return char:FindFirstChildOfClass("Tool")
+end
+
+local function KAFireAtZombies(zombies)
+    if #zombies == 0 then return 0 end
+    
+    local gun = KAGetEquippedGun()
+    if not gun then return 0 end
+    KAState.EquippedGunName = gun.Name
+    
+    local char = LocalPlayer.Character
+    if not char then return 0 end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return 0 end
+    
+    local origin = hrp.Position + Vector3.new(0, 2, 0)
+    local remoteCount = 0
+    
+    if KAState.GunClient and KAState.GunClient.TryFire then
+        local oldGetAim = KAState.GunClient.GetAimDirection
+        local wasFiring = KAState.GunClient.IsFiring
+        
+        local closest = zombies[1]
+        if closest and closest.Position then
+            local dir = (closest.Position - origin).Unit
+            
+            if oldGetAim then
+                KAState.GunClient.GetAimDirection = function(self) return dir end
+            end
+            KAState.GunClient.IsFiring = true
+            
+            pcall(function()
+                KAState.GunClient:TryFire()
+            end)
+            
+            remoteCount = remoteCount + 1
+        end
+        
+        if oldGetAim then
+            KAState.GunClient.GetAimDirection = oldGetAim
+        end
+        KAState.GunClient.IsFiring = wasFiring
+        
+        if KAState.GunRemotes and KAState.GunRemotes.Hit then
+            local maxHits = math.min(#zombies, KAConfig.MaxRemotesPerFire)
+            
+            for i = 1, maxHits do
+                local zombie = zombies[i]
+                if zombie and zombie.Id and zombie.Position then
+                    task.spawn(function()
+                        pcall(function()
+                            KAState.GunRemotes.Hit:FireServer(gun.Name, zombie.Id, zombie.Position)
+                        end)
+                    end)
+                end
+            end
+            
+            remoteCount = remoteCount + maxHits
+        end
+        
+        return remoteCount
+    end
+    
+    if KAState.GunRemotes then
+        if KAState.GunRemotes.Fire and zombies[1] and zombies[1].Position then
+            pcall(function()
+                KAState.GunRemotes.Fire:FireServer(gun.Name, origin, (zombies[1].Position - origin).Unit)
+            end)
+            remoteCount = remoteCount + 1
+        end
+        
+        if KAState.GunRemotes.Hit then
+            local maxHits = math.min(#zombies, KAConfig.MaxRemotesPerFire)
+            
+            for i = 1, maxHits do
+                local zombie = zombies[i]
+                if zombie and zombie.Id and zombie.Position then
+                    task.spawn(function()
+                        pcall(function()
+                            KAState.GunRemotes.Hit:FireServer(gun.Name, zombie.Id, zombie.Position)
+                        end)
+                    end)
+                end
+            end
+            
+            remoteCount = remoteCount + maxHits
+        end
+        
+        return remoteCount
+    end
+    
+    return 0
+end
+
+local function KALoop()
+    if not KAConfig.Enabled then
+        KAClearHighlight()
+        KAState.CurrentTarget = nil
+        return
+    end
+    
+    local now = tick()
+    if now - KAState.LastFireTime < KAConfig.FireRate then return end
+    
+    local maxTargets = KAConfig.MaxRemotesPerFire
+    local targets = KAGetClosestZombies(maxTargets)
+    
+    if #targets > 0 then
+        local remotesFired = KAFireAtZombies(targets)
+        KAState.LastRemoteCount = remotesFired
+        KAState.TotalDamageDealt = KAState.TotalDamageDealt + #targets
+        
+        KAState.LastFireTime = now
+        KAState.CurrentTarget = targets[1]
+        KAHighlightTarget(targets[1])
+    else
+        KAClearHighlight()
+        KAState.CurrentTarget = nil
+        KAState.LastRemoteCount = 0
+    end
+end
+
+KABox:AddToggle("KAEnable", {
+    Text = "Enable Kill Aura",
+    Default = false,
+    Tooltip = "Toggle Kill Aura on/off",
+    Callback = function(Value)
+        KAConfig.Enabled = Value
+        if not Value then
+            KAClearHighlight()
+            KAState.CurrentTarget = nil
+        end
+    end,
+})
+
+KABox:AddSlider("KARange", {
+    Text = "Range",
+    Default = KAConfig.Range,
+    Min = 10,
+    Max = 200,
+    Rounding = 0,
+    Tooltip = "Detection range in studs",
+    Callback = function(Value)
+        KAConfig.Range = Value
+    end,
+})
+
+KABox:AddSlider("KAMaxRemotes", {
+    Text = "Max Remotes/Tick",
+    Default = KAConfig.MaxRemotesPerFire,
+    Min = 1,
+    Max = 20,
+    Rounding = 0,
+    Tooltip = "Max GunHit remotes per tick (lower = safer)",
+    Callback = function(Value)
+        KAConfig.MaxRemotesPerFire = Value
+    end,
+})
+
+KABox:AddSlider("KAFireRate", {
+    Text = "Fire Rate",
+    Default = KAConfig.FireRate * 100,
+    Min = 1,
+    Max = 20,
+    Rounding = 0,
+    Tooltip = "Fire rate in seconds x100 (lower = faster)",
+    Callback = function(Value)
+        KAConfig.FireRate = Value / 100
+    end,
+})
+
+KABox:AddToggle("KAHighlight", {
+    Text = "Highlight Target",
+    Default = KAConfig.HighlightTarget,
+    Tooltip = "Toggle target highlight",
+    Callback = function(Value)
+        KAConfig.HighlightTarget = Value
+        if not Value then KAClearHighlight() end
+    end,
+})
+
+KABox:AddLabel("Keybind: [K] to Toggle")
+
+KABox:AddLabel("═══════════════")
+KABox:AddLabel("STATUS")
+
+local KAStatusLabel = KABox:AddLabel("ZombieClient: ??? | GunClient: ???")
+local KATargetLabel = KABox:AddLabel("Target: None")
+local KACountLabel = KABox:AddLabel("Zombies: 0")
+local KARemoteLabel = KABox:AddLabel("Remotes: 0 | Total Hits: 0")
+
+task.spawn(function()
+    while true do
+        task.wait(0.3)
+        
+        local zc = KAState.ZombieClient and "✓" or "✗"
+        local gc = KAState.GunClient and "✓" or "✗"
+        KAStatusLabel:SetText("ZombieClient: " .. zc .. " | GunClient: " .. gc)
+        
+        if KAConfig.Enabled and KAState.CurrentTarget then
+            local dist = KAState.CurrentTarget.Distance and math.floor(KAState.CurrentTarget.Distance) or 0
+            KATargetLabel:SetText("Target: " .. tostring(KAState.CurrentTarget.Tier or "Zombie") .. " | " .. dist .. " studs")
+        else
+            KATargetLabel:SetText("Target: None")
+        end
+        
+        KACountLabel:SetText("Zombies: " .. #KAScanZombiesFast())
+        KARemoteLabel:SetText("Remotes: " .. KAState.LastRemoteCount .. " | Total Hits: " .. KAState.TotalDamageDealt)
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == KAConfig.Keybind then
+        KAConfig.Enabled = not KAConfig.Enabled
+        Library.Options.KAEnable:SetValue(KAConfig.Enabled)
+        if not KAConfig.Enabled then
+            KAClearHighlight()
+            KAState.CurrentTarget = nil
+        end
+    end
+end)
+
+local FixLagBox = FixLagTab:AddLeftGroupbox("FPS Boost")
+
+
+
+
+
+local RemovedMap = false
+
+
+local RemovedEffects = false
+
+
+local InvisibleZombie = false
+
+
+
+
+
+local HiddenParts = {}
+
+
+local HiddenEffects = {}
+
+
+
+
+
+
+
+FixLagBox:AddToggle("RemoveMap", {
+
+
+    Text = "Remove Map",
+
+
+    Default = false,
+
+
+    Tooltip = "Hide map visually",
+
+
+    Callback = function(Value)
+
+
+        RemovedMap = Value
+
+
+
+
+
+        if Value then
+
+
+            for _, v in pairs(workspace:GetDescendants()) do
+
+
+                if v:IsA("BasePart") then
+
+
+                    local isZombie =
+
+
+                        v:FindFirstAncestor("Zombies_Local")
+
+
+
+
+
+                    local isPlayer =
+
+
+                        Players:GetPlayerFromCharacter(v:FindFirstAncestorOfClass("Model"))
+
+
+
+
+
+                    if not isZombie and not isPlayer then
+
+
+                        if v.Transparency < 1 then
+
+
+                            HiddenParts[v] = v.Transparency
+
+
+                            v.LocalTransparencyModifier = 1
+
+
+                        end
+
+
+                    end
+
+
+                end
+
+
+            end
+
+
+
+
+
+            Library:Notify("Map hidden visually", 3)
+
+
+        else
+
+
+            for part, trans in pairs(HiddenParts) do
+
+
+                if part and part.Parent then
+
+
+                    part.LocalTransparencyModifier = 0
+
+
+                end
+
+
+            end
+
+
+
+
+
+            HiddenParts = {}
+
+
+            Library:Notify("Map restored", 3)
+
+
+        end
+
+
+    end,
+
+
+})
+
+
+
+
+
+
+
+FixLagBox:AddToggle("RemoveEffects", {
+
+
+    Text = "Remove Effects",
+
+
+    Default = false,
+
+
+    Tooltip = "Disable laggy effects",
+
+
+    Callback = function(Value)
+
+
+        RemovedEffects = Value
+
+
+
+
+
+        if Value then
+
+
+            for _, v in pairs(workspace:GetDescendants()) do
+
+
+                if v:IsA("ParticleEmitter")
+
+
+                or v:IsA("Trail")
+
+
+                or v:IsA("Beam")
+
+
+                or v:IsA("Smoke")
+
+
+                or v:IsA("Fire")
+
+
+                or v:IsA("Sparkles") then
+
+
+
+
+
+                    HiddenEffects[v] = v.Enabled
+
+
+                    v.Enabled = false
+
+
+                end
+
+
+
+
+
+                if v:IsA("Explosion") then
+
+
+                    v.BlastPressure = 0
+
+
+                    v.BlastRadius = 0
+
+
+                end
+
+
+            end
+
+
+
+
+
+            Library:Notify("Effects removed", 3)
+
+
+        else
+
+
+            for effect, enabled in pairs(HiddenEffects) do
+
+
+                if effect and effect.Parent then
+
+
+                    effect.Enabled = enabled
+
+
+                end
+
+
+            end
+
+
+
+
+
+            HiddenEffects = {}
+
+
+            Library:Notify("Effects restored", 3)
+
+
+        end
+
+
+    end,
+
+
+})
+
+local MenuBox = SettingsTab:AddLeftGroupbox("Menu")
+
+MenuBox:AddButton({
+    Text = "Unload",
+    Func = function()
+        if Flying then StopFly() end
+        if NoclipConnection then
+            NoclipConnection:Disconnect()
+            NoclipConnection = nil
+        end
+
+        KAClearHighlight()
+        KAConfig.Enabled = false
+        if KAState.Connection then
+            KAState.Connection:Disconnect()
+        end
+        Library:Unload()
+    end,
+})
+
+MenuBox:AddLabel("Menu bind"):AddKeyPicker("MenuKeybind", {
+    Default = "RightShift",
+    NoUI = true,
+    Text = "Menu Keybind"
+})
+
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
+ThemeManager:ApplyToTab(SettingsTab)
+SaveManager:BuildConfigSection(SettingsTab)
+SaveManager:LoadAutoloadConfig()
+
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1)
+    PlayerScripts = LocalPlayer:WaitForChild("PlayerScripts")
+    PlayerModule = require(PlayerScripts:WaitForChild("PlayerModule"))
+    ControlModule = PlayerModule:GetControls()
+    
+    if Flying then
+        task.wait(0.5)
+        StartFly()
+    end
+end)
+
+local function Init()
+    KAFindGameClients()
+    KAState.Connection = RunService.RenderStepped:Connect(KALoop)
+    print("[TDZ Team] Loaded successfully!")
+end
+
+if _G.SigmaCleanup then pcall(_G.SigmaCleanup) end
+
+_G.SigmaCleanup = function()
+    if KAState.Connection then KAState.Connection:Disconnect() end
+    KAClearHighlight()
+    KAConfig.Enabled = false
+    if ZombieESP.Folder then
+        ZombieESP.Folder:Destroy()
+    end
+end
+
+game:GetService("TextChatService").TextChannels.RBXGeneral:SendAsync("thanh Skidder")
+
+Init()
+
+Library:Notify("Tung tung sahur hub Loaded!", 3)
